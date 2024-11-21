@@ -23,8 +23,10 @@ func main() {
 	var wg = new(sync.WaitGroup)
 
 	ev := config.Read("config.yml")
-
-	value := db.AddServer(ev)
+	db.Connect(ev)
+	defer db.Disconnect()
+	var host = ev.Ftp.Host
+	value := db.AddServer(host)
 	fmt.Println("ServerId = ", value)
 	//if true {
 	//	return
@@ -44,7 +46,7 @@ func main() {
 
 	var fileInfo = ftp.FileInfo{Name: *startDir, Path: startPath, IsDir: true, Size: 0, ParentId: nil}
 
-	db.SaveFolder(ev, &fileInfo)
+	db.SaveFolder(host, &fileInfo)
 	mset[*startDir] = fileInfo
 
 	//wg.Add(1)
@@ -56,7 +58,7 @@ func main() {
 		for k, v := range mset {
 			var files, folders, emptyFolders = ftp.ReadDir(ftpClient, v)
 			for _, folder := range *folders {
-				db.SaveFolder(ev, &folder)
+				db.SaveFolder(host, &folder)
 				var key = folder.Path + folder.Name
 				mset[key] = folder
 			}
@@ -67,9 +69,9 @@ func main() {
 			delete(mset, k)
 			wg.Add(1)
 			//                fmt.Println("Scanned ", k)
-			go db.AddFiles(ev, wg, *files)
+			go db.AddFiles(host, wg, *files)
 			wg.Add(1)
-			go db.AddFoldersToEmpty(ev, wg, *emptyFolders)
+			go db.AddFoldersToEmpty(host, wg, *emptyFolders)
 		}
 		fmt.Println("\n====================  Map size =", len(mset))
 	}

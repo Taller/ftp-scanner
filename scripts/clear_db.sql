@@ -1,21 +1,21 @@
-truncate ftp.file cascade;
-truncate ftp.file_attr cascade;
-truncate ftp.folder cascade;
-truncate ftp.empty_folder cascade;
-truncate ftp.server cascade;
+truncate scanner.file cascade;
+truncate scanner.file_attr cascade;
+truncate scanner.folder cascade;
+truncate scanner.empty_folder cascade;
+truncate scanner.server cascade;
 
-ALTER SEQUENCE ftp.files_id_seq RESTART WITH 1;
-UPDATE ftp.file SET id=nextval('ftp.files_id_seq');
+ALTER SEQUENCE scanner.files_id_seq RESTART WITH 1;
+UPDATE scanner.file SET id=nextval('scanner.files_id_seq');
 
-ALTER SEQUENCE ftp.file_attrs_id_seq RESTART WITH 1;
-UPDATE ftp.file_attr SET id=nextval('ftp.file_attrs_id_seq');
+ALTER SEQUENCE scanner.file_attrs_id_seq RESTART WITH 1;
+UPDATE scanner.file_attr SET id=nextval('scanner.file_attrs_id_seq');
 
-ALTER SEQUENCE ftp.folder_id_seq RESTART WITH 1;
-UPDATE ftp.folder SET id=nextval('ftp.folder_id_seq');
+ALTER SEQUENCE scanner.folder_id_seq RESTART WITH 1;
+UPDATE scanner.folder SET id=nextval('scanner.folder_id_seq');
 
-ALTER SEQUENCE ftp.empty_folder_id_seq RESTART WITH 1;
-UPDATE ftp.empty_folder SET id=nextval('ftp.empty_folder_id_seq');
+ALTER SEQUENCE scanner.empty_folder_id_seq RESTART WITH 1;
+UPDATE scanner.empty_folder SET id=nextval('scanner.empty_folder_id_seq');
 
-ALTER SEQUENCE ftp.server_id_seq RESTART WITH 1;
-UPDATE ftp.server SET id=nextval('ftp.server_id_seq');
+ALTER SEQUENCE scanner.server_id_seq RESTART WITH 1;
+UPDATE scanner.server SET id=nextval('scanner.server_id_seq');
 

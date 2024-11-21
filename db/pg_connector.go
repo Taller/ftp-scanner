@@ -16,44 +16,48 @@ import (
 	"strings"
 )
 
-func AddServer(config config.Config) int64 {
+var dbConnect *sql.DB
+
+func Connect(config config.Config) {
 	db, err := sql.Open("postgres", connectionString(config))
 
 	if err != nil {
 		panic(err)
 	}
-	defer db.Close()
 
+	dbConnect = db
+}
+
+func Disconnect() {
+	dbConnect.Close()
+}
+
+func AddServer(host string) int64 {
 	serverId := 0
 	sqlSelectStatement := `SELECT id FROM server where name = $1`
-	err = db.QueryRow(sqlSelectStatement, config.Ftp.Host).Scan(&serverId)
+
+	var err = dbConnect.QueryRow(sqlSelectStatement, host).Scan(&serverId)
 	if err == nil {
 		return int64(serverId)
 	}
 
-	fmt.Println("Server not found trying to insert", config.Ftp.Host)
+	fmt.Println("Server not found trying to insert", host)
 
 	sqlStatement := `INSERT INTO server(name) VALUES ($1) RETURNING id`
-	err = db.QueryRow(sqlStatement, config.Ftp.Host).Scan(&serverId)
+	err = dbConnect.QueryRow(sqlStatement, host).Scan(&serverId)
 	if err == nil {
 		return int64(serverId)
 	}
-	fmt.Println("Can't insert ", config.Ftp.Host)
+	fmt.Println("Can't insert ", host)
 	fmt.Println(err)
 
 	return -1
 }
 
-func AddFiles(config config.Config, wg *sync.WaitGroup, files []ftp.FileInfo) {
-	db, err := sql.Open("postgres", connectionString(config))
-
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
+func AddFiles(host string, wg *sync.WaitGroup, files []ftp.FileInfo) {
 	defer wg.Done()
 
-	serverId := AddServer(config)
+	serverId := AddServer(host)
 	sqlStatement := `INSERT INTO file(full_name, fname, path, size, folder_id, server_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
 	sqlStatementFileAttr := `INSERT INTO file_attr(file_id, length) VALUES ($1, $2) RETURNING id`
 
@@ -61,9 +65,9 @@ func AddFiles(config config.Config, wg *sync.WaitGroup, files []ftp.FileInfo) {
 	fileAttrId := 0
 	for _, f := range files {
 		fullName := f.Path + f.Name
-		err = db.QueryRow(sqlStatement, fullName, f.Name, f.Path, f.Size, *f.ParentId, serverId).Scan(&id)
+		var err = dbConnect.QueryRow(sqlStatement, fullName, f.Name, f.Path, f.Size, *f.ParentId, serverId).Scan(&id)
 		if err == nil {
-			db.QueryRow(sqlStatementFileAttr, id, f.Size).Scan(&fileAttrId)
+			dbConnect.QueryRow(sqlStatementFileAttr, id, f.Size).Scan(&fileAttrId)
 			continue
 		}
 		if strings.Contains(err.Error(), "fullname_unique") {
@@ -74,7 +78,7 @@ func AddFiles(config config.Config, wg *sync.WaitGroup, files []ftp.FileInfo) {
 		fmt.Println(err)
 
 		if strings.Contains(err.Error(), "invalid byte sequence for encoding") {
-			err = db.QueryRow(sqlStatement, tidy(f.Path), tidy(f.Name), f.Path, f.Size).Scan(&id)
+			err = dbConnect.QueryRow(sqlStatement, tidy(f.Path), tidy(f.Name), f.Path, f.Size).Scan(&id)
 			if err == nil {
 				continue
 			}
@@ -85,19 +89,13 @@ func AddFiles(config config.Config, wg *sync.WaitGroup, files []ftp.FileInfo) {
 
 }
 
-func SaveFolder(config config.Config, folder *ftp.FileInfo) {
-	db, err := sql.Open("postgres", connectionString(config))
+func SaveFolder(host string, folder *ftp.FileInfo) {
 
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
-	serverId := AddServer(config)
+	serverId := AddServer(host)
 
 	id := 0
 	sqlInsertStatement := `INSERT INTO folder(name, parent_id, server_id) VALUES ($1, $2, $3) RETURNING id`
-	err = db.QueryRow(sqlInsertStatement, folder.Path, folder.ParentId, serverId).Scan(&id)
+	var err = dbConnect.QueryRow(sqlInsertStatement, folder.Path, folder.ParentId, serverId).Scan(&id)
 	if err == nil {
 		//fmt.Println("SaveFolder with id - ", id)
 		folder.Id = uint64(id)
@@ -106,7 +104,7 @@ func SaveFolder(config config.Config, folder *ftp.FileInfo) {
 
 	if strings.Contains(err.Error(), "folder_name_unique") {
 		sqlSelectStatement := `SELECT id FROM folder WHERE name = $1 and server_id = $2`
-		err = db.QueryRow(sqlSelectStatement, folder.Path, serverId).Scan(&id)
+		err = dbConnect.QueryRow(sqlSelectStatement, folder.Path, serverId).Scan(&id)
 
 		//fmt.Println("SaveFolder selected id - ", id)
 		folder.Id = uint64(id)
@@ -119,16 +117,11 @@ func SaveFolder(config config.Config, folder *ftp.FileInfo) {
 	fmt.Println(err)
 }
 
-func AddFoldersToEmpty(config config.Config, wg *sync.WaitGroup, files []ftp.FileInfo) {
-	db, err := sql.Open("postgres", connectionString(config))
+func AddFoldersToEmpty(host string, wg *sync.WaitGroup, files []ftp.FileInfo) {
 
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
 	defer wg.Done()
 
-	serverId := AddServer(config)
+	serverId := AddServer(host)
 	sqlStatement := `INSERT INTO file(full_name, fname, path, size, folder_id, server_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
 	sqlStatementFileAttr := `INSERT INTO file_attr(file_id, length) VALUES ($1, $2) RETURNING id`
 
@@ -136,9 +129,9 @@ func AddFoldersToEmpty(config config.Config, wg *sync.WaitGroup, files []ftp.Fil
 	fileAttrId := 0
 	for _, f := range files {
 		fullName := f.Path + f.Name
-		err = db.QueryRow(sqlStatement, fullName, f.Name, f.Path, f.Size, *f.ParentId, serverId).Scan(&id)
+		var err = dbConnect.QueryRow(sqlStatement, fullName, f.Name, f.Path, f.Size, *f.ParentId, serverId).Scan(&id)
 		if err == nil {
-			db.QueryRow(sqlStatementFileAttr, id, f.Size).Scan(&fileAttrId)
+			dbConnect.QueryRow(sqlStatementFileAttr, id, f.Size).Scan(&fileAttrId)
 			continue
 		}
 		if strings.Contains(err.Error(), "fullname_unique") {
@@ -149,7 +142,7 @@ func AddFoldersToEmpty(config config.Config, wg *sync.WaitGroup, files []ftp.Fil
 		fmt.Println(err)
 
 		if strings.Contains(err.Error(), "invalid byte sequence for encoding") {
-			err = db.QueryRow(sqlStatement, tidy(f.Path), tidy(f.Name), f.Path, f.Size).Scan(&id)
+			err = dbConnect.QueryRow(sqlStatement, tidy(f.Path), tidy(f.Name), f.Path, f.Size).Scan(&id)
 			if err == nil {
 				continue
 			}
