@@ -152,31 +152,17 @@ func AddFoldersToEmpty(host string, wg *sync.WaitGroup, files []ftp.FileInfo) {
 	}
 }
 
-func UpdateFileAttrWithHash(config config.Config, fileId uint64, fileHash string) {
-	db, err := sql.Open("postgres", connectionString(config))
-
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
+func UpdateFileAttrWithHash(fileId uint64, fileHash string) {
 	sqlStatement := `UPDATE file_attr SET hash=$1 WHERE file_id=$2`
 	id := 0
 
-	err = db.QueryRow(sqlStatement, fileHash, fileId).Scan(&id)
+	var err = dbConnect.QueryRow(sqlStatement, fileHash, fileId).Scan(&id)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func QueryLargestFileNameWithouHash(config config.Config) (*uint64, string, uint64) {
-	db, err := sql.Open("postgres", connectionString(config))
-
-	if err != nil {
-		panic(err)
-	}
-	defer db.Close()
-
+func QueryLargestFileNameWithouHash() (*uint64, string, uint64) {
 	sqlStatement := `SELECT f.id, full_name, max(size) size
                          FROM file f LEFT JOIN file_attr fa ON f.id=fa.file_id AND fa.hash IS NULL
                          GROUP BY f.id, full_name, path
@@ -190,7 +176,7 @@ func QueryLargestFileNameWithouHash(config config.Config) (*uint64, string, uint
 	var qName sql.NullString
 	var qSize sql.NullInt64
 
-	err = db.QueryRow(sqlStatement).Scan(&qId, &qName, &qSize)
+	var err = dbConnect.QueryRow(sqlStatement).Scan(&qId, &qName, &qSize)
 	if err != nil {
 		fmt.Println(err.Error())
 		if err == sql.ErrNoRows {

@@ -23,17 +23,21 @@ func main() {
 	var wg = new(sync.WaitGroup)
 
 	ev := config.Read("config.yml")
+
 	db.Connect(ev)
 	defer db.Disconnect()
+
 	var host = ev.Ftp.Host
 	value := db.AddServer(host)
+
 	fmt.Println("ServerId = ", value)
 	//if true {
 	//	return
 	//}
 
 	mset := ftp.FileRecord{}
-	ftpClient := createFtpClient(ev)
+	ftp.Connect(ev)
+	defer ftp.Disconnect()
 
 	var startPath = *startDir
 	var lastSymbol = (*startDir)[len(*startDir)-1:]
@@ -56,7 +60,7 @@ func main() {
 	nums := 0
 	for len(mset) > 0 {
 		for k, v := range mset {
-			var files, folders, emptyFolders = ftp.ReadDir(ftpClient, v)
+			var files, folders, emptyFolders = ftp.ReadDir(v)
 			for _, folder := range *folders {
 				db.SaveFolder(host, &folder)
 				var key = folder.Path + folder.Name
@@ -76,34 +80,18 @@ func main() {
 		fmt.Println("\n====================  Map size =", len(mset))
 	}
 	fmt.Println(mset)
-	defer func(ftpClient *goftp.Client) {
-		_ = ftpClient.Close()
-	}(ftpClient)
+
 	wg.Wait()
 }
 
-func createFtpClient(conf config.Config) *goftp.Client {
-	var ftpConfig = goftp.Config{
-		User:     conf.Ftp.Username,
-		Password: conf.Ftp.Password,
-	}
-	client, err := goftp.DialConfig(ftpConfig, conf.Ftp.Host)
-	if err != nil {
-		panic(err)
-	}
-
-	return client
-}
-
-func hashFiles(conf config.Config, wg *sync.WaitGroup) {
+func hashFiles(ftpClient goftp.Client, wg *sync.WaitGroup) {
 	defer wg.Done()
-	ftpClient := createFtpClient(conf)
 
 	var id *uint64
 	var fullName string
 	var size uint64
 
-	id, fullName, size = db.QueryLargestFileNameWithouHash(conf)
+	id, fullName, size = db.QueryLargestFileNameWithouHash()
 	retry := 0
 	for retry < 10 {
 		fmt.Println("\nFullName", fullName)
@@ -111,7 +99,7 @@ func hashFiles(conf config.Config, wg *sync.WaitGroup) {
 			retry++
 			time.Sleep(3 * time.Second)
 		} else {
-			ftp.DownloadAsFile(ftpClient, fullName)
+			ftp.DownloadAsFile(fullName)
 			fi, err := os.Stat(".tmp")
 			var fileHash = "wrong"
 			if err == nil && size == uint64(fi.Size()) {
@@ -121,10 +109,10 @@ func hashFiles(conf config.Config, wg *sync.WaitGroup) {
 				fileHash = hash.CalcHash(".tmp")
 				//			db.InsertFileAttr(conf, *id, h, size)
 			}
-			db.UpdateFileAttrWithHash(conf, *id, fileHash)
+			db.UpdateFileAttrWithHash(*id, fileHash)
 			os.Remove(".tmp")
 
 		}
-		id, fullName, _ = db.QueryLargestFileNameWithouHash(conf)
+		id, fullName, _ = db.QueryLargestFileNameWithouHash()
 	}
 }

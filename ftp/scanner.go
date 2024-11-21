@@ -1,13 +1,33 @@
 package ftp
 
 import (
+	"ftp-scanner/config"
 	//	"fmt"
 	"github.com/secsy/goftp"
 	"os"
 	"strings"
 )
 
-func ReadDir(client *goftp.Client, baseFolder FileInfo) (*[]FileInfo, *[]FileInfo, *[]FileInfo) {
+var client *goftp.Client
+
+func Connect(config config.Config) {
+	var ftpConfig = goftp.Config{
+		User:     config.Ftp.Username,
+		Password: config.Ftp.Password,
+	}
+	c, err := goftp.DialConfig(ftpConfig, config.Ftp.Host)
+	if err != nil {
+		panic(err)
+	}
+
+	client = c
+}
+
+func Disconnect() {
+	client.Close()
+}
+
+func ReadDir(baseFolder FileInfo) (*[]FileInfo, *[]FileInfo, *[]FileInfo) {
 	var filesResult = new([]FileInfo)
 	var foldersResult = new([]FileInfo)
 	var emptyFolder = new([]FileInfo)
@@ -47,7 +67,7 @@ func DownloadAsBuffer() []int {
 	return result
 }
 
-func DownloadAsFile(client *goftp.Client, file string) {
+func DownloadAsFile(file string) {
 	temp, err := os.Create(".tmp")
 	if err != nil {
 		panic(err)
